@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聚合搜 - PikPak 秒传版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-[#050301] text-slate-200">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState } = React;
+
+        const App = () => {
+            const [keyword, setKeyword] = useState('');
+            const [items, setItems] = useState([]);
+            const [loading, setLoading] = useState(false);
+
+            const handleSearch = async (e) => {
+                if (e) e.preventDefault();
+                setLoading(true);
+                try {
+                    const res = await fetch(`https://sodx.zeabur.app/api/search?kw=${encodeURIComponent(keyword)}&res=merge`);
+                    const data = await res.json();
+                    let list = data.data || data.list || [];
+                    if (data?.data?.merged_by_type) list = Object.values(data.data.merged_by_type).flat();
+                    setItems(list.map(i => ({ name: i.note || i.name, url: i.url })));
+                } catch (e) { alert("搜索失败"); }
+                setLoading(false);
+            };
+
+            // --- 核心修复：稳定版跳转逻辑 ---
+            const pushToPikPak = (url) => {
+                // 1. 构造官方 Web 版中转链接 (最稳)
+                const webUrl = `https://mypikpak.com/drive/url-checker?url=${encodeURIComponent(url)}`;
+                
+                // 2. 尝试唤起 APP 协议 (部分安卓支持)
+                const appScheme = `pikpak://add?url=${encodeURIComponent(url)}`;
+                
+                // 3. 执行逻辑：先尝试 APP，若无反应则进网页
+                const start = Date.now();
+                window.location.href = appScheme;
+
+                setTimeout(() => {
+                    // 如果 2秒内没离开页面，说明 APP 没唤起，直接开网页版
+                    if (Date.now() - start < 2500) {
+                        window.open(webUrl, '_blank');
+                    }
+                }, 2000);
+            };
+
+            return (
+                <div className="max-w-xl mx-auto p-6">
+                    <form onSubmit={handleSearch} className="flex gap-2 mb-8">
+                        <input type="text" value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="输入片名..." className="flex-1 bg-white/10 p-3 rounded-xl outline-none"/>
+                        <button className="bg-blue-600 px-6 rounded-xl font-bold">{loading ? "..." : "搜"}</button>
+                    </form>
+                    <div className="space-y-4">
+                        {items.map((item, i) => (
+                            <div key={i} className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                <h3 className="text-sm font-bold truncate mb-3">{item.name}</h3>
+                                <div className="flex gap-2">
+                                    <button onClick={() => {navigator.clipboard.writeText(item.url); alert("已复制");}} className="flex-1 py-2 bg-white/10 rounded-lg text-xs">复制</button>
+                                    <button onClick={() => pushToPikPak(item.url)} className="flex-1 py-2 bg-blue-600 rounded-lg text-xs font-bold text-white">🚀 秒传 PikPak</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
